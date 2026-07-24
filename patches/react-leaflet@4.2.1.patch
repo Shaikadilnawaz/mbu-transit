@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-leaflet/package.json b/node_modules/react-leaflet/package.json
+index 5174415..2157b89 100644
+--- a/node_modules/react-leaflet/package.json
++++ b/node_modules/react-leaflet/package.json
+@@ -63,7 +63,7 @@
+     "leaflet": ">=1.7.1",
+     "react": "^18.0.0",
+     "react-dom": "^18.0.0"
+   },
+   "peerDependenciesMeta": {
+     "leaflet": {
+       "optional": true
+     }
+@@
+

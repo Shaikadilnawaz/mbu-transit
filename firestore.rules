@@ -1,0 +1,96 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- helpers -----------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    // Looks up the signed-in user's profile to read their role.
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return isSignedIn() && role() == 'admin';
+    }
+
+    match /users/{uid} {
+      // Users read their own profile; admins read everyone; any signed-in user
+      // can read driver / student-driver profiles (so students can find them and
+      // detect when no drivers are available).
+      allow read: if request.auth != null
+        && (request.auth.uid == uid
+            || isAdmin()
+            || resource.data.role == 'student-driver'
+            || resource.data.role == 'driver');
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.role == 'student';
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role;
+
+      allow delete: if false;
+    }
+
+    // SOS alerts: any signed-in user (a student) can raise one; only admins
+    // can read the list and mark alerts resolved.
+    match /sos/{alertId} {
+      allow create: if isSignedIn();
+      allow read, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // Bookings: a student creates their own booking; any signed-in user
+    // (drivers to accept, admins to monitor, the student to track) can read;
+    // signed-in users can update (a driver accepting, a student cancelling).
+    match /bookings/{bookingId} {
+      allow create: if isSignedIn()
+        && request.resource.data.studentUid == request.auth.uid;
+      allow read: if isSignedIn();
+      // Update allowed for: the student who owns it, the assigned driver, any
+      // driver accepting/declining a still-pending ride, or an admin.
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.studentUid
+        || request.auth.uid == resource.data.driverUid
+        || resource.data.status == 'pending'
+        || isAdmin()
+      );
+      allow delete: if false;
+
+      // Chat: only the ride's student, its driver, or an admin can read/send.
+      match /messages/{messageId} {
+        function booking() {
+          return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+        }
+        allow read, create: if isSignedIn()
+          && (request.auth.uid == booking().studentUid
+              || request.auth.uid == booking().driverUid
+              || isAdmin());
+        allow update, delete: if false;
+      }
+    }
+
+    // Complaints: any signed-in user can file one; only admins read them.
+    match /complaints/{complaintId} {
+      allow create: if isSignedIn();
+      allow read, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // Offers/coupons: any signed-in user can read them; only admins manage them.
+    match /offers/{offerId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Default-deny: no other collection has data yet, and none should be
+    // readable/writable until it gets its own rules defined here.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

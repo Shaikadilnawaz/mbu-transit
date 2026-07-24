@@ -1,70 +1,133 @@
-# Getting Started with Create React App
+# MCONNECTS — Student Transport App (Mohan Babu University)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A campus transport app: on-demand **auto rides**, student-to-student **carpool rides**,
+**APSRTC bus** schedules, live **tracking**, **chat**, **SOS**, and role-based dashboards
+for students, drivers, student-drivers, and admins.
 
-## Available Scripts
+- **Framework:** Next.js 15 (App Router) + React 19 + TypeScript
+- **Styling:** Tailwind CSS (white/black/gold theme, forced light)
+- **Backend:** Firebase — Authentication + Cloud Firestore (real-time)
+- **Maps:** Leaflet + OpenStreetMap (tiles), OSRM (routing), Nominatim (search)
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## Getting started (run on any PC)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+> The backend is Firebase in the cloud and is **shared** — there's nothing to install
+> for the backend. Each PC just needs the app + the Firebase config.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+1. **Install [Node.js](https://nodejs.org/)** (LTS).
+2. **Clone the repo**, then `cd` into it.
+3. **Create `.env.local`** in the project root. Copy `.env.local.example` and fill in the
+   Firebase web config (ask a teammate for the values — same values for everyone since we
+   share one Firebase project):
+   ```
+   NEXT_PUBLIC_FIREBASE_API_KEY=...
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+   NEXT_PUBLIC_FIREBASE_APP_ID=...
+   ```
+4. **Install dependencies & run:**
+   ```bash
+   npm install
+   npm run dev
+   ```
+   Open http://localhost:9002
 
-### `npm test`
+`.env.local` is **git-ignored** (never committed). Firebase web config keys are safe to
+share within the team — access is protected by Firestore security rules, not by hiding keys.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+---
 
-### `npm run build`
+## Project structure
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```
+src/
+├─ app/                         # Pages & routes (Next.js App Router). Folder = URL.
+│  ├─ (student)/                # Student pages — the "(student)" name is just grouping,
+│  │  ├─ dashboard/             #   not part of the URL. → /dashboard
+│  │  ├─ book-auto/             # → /book-auto      (auto ride booking + map)
+│  │  ├─ student-ride/          # → /student-ride   (carpool booking + map)
+│  │  ├─ ride-history/          # → /ride-history
+│  │  ├─ messages/              # → /messages       (chat list)
+│  │  ├─ track/[id]/            # → /track/<id>     (live tracking, shared by all roles)
+│  │  └─ contact/               # → /contact
+│  ├─ driver/                   # Auto-driver pages    → /driver/...          (guarded)
+│  ├─ student-driver/           # Student-driver pages → /student-driver/...  (guarded)
+│  ├─ admin/                    # Admin pages          → /admin/...           (guarded)
+│  ├─ login/  signup/  offers/  bus-schedule/  forgot-password/
+│  ├─ layout.tsx                # Root layout (theme + auth provider)
+│  └─ globals.css               # Theme colors (white/black/gold tokens)
+│
+├─ components/
+│  ├─ ui/                       # Reusable UI primitives (button, card, table, input…)
+│  ├─ layout/                   # Top navs: guest-nav, driver-nav, student-driver-nav,
+│  │                            #   admin-shell
+│  ├─ auth/                     # login-form, signup-form, role-guard, auth-shell, guest-only
+│  ├─ map/                      # location-picker, ride-tracking-map, use-ride-progress
+│  └─ chat/                     # chat-box, messages-view
+│
+├─ context/
+│  └─ auth-context.tsx          # Login/signup/logout + current user & role (used everywhere)
+│
+├─ lib/
+│  ├─ firebase.ts               # Firebase init (reads .env.local)
+│  ├─ db.ts                     # ALL Firestore reads/writes live here (one place)
+│  ├─ types.ts                  # Shared TypeScript types (Booking, UserProfile, roles…)
+│  ├─ geo.ts                    # Map maths: 30km rule, fare, routing, place search
+│  └─ utils.ts                  # Small helpers (cn)
+│
+└─ ai/                          # (Optional) Genkit AI — disabled unless an API key is set
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+firestore.rules                 # Security rules — must be PUBLISHED in the Firebase console
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+**Rules of thumb for teammates:**
+- A new page → add a folder under `src/app/...` (the folder path becomes the URL).
+- Any database read/write → add it to **`src/lib/db.ts`** (don't scatter Firestore calls).
+- Shared types → **`src/lib/types.ts`**.
+- Reusable button/card/etc. → **`src/components/ui/`**.
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Roles
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+`student` · `driver` · `student-driver` · `admin` (values are lowercase, case-sensitive).
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+- **Students** self-register (email must end `@mbu.asia`).
+- **Driver / Admin** use `@gmail.com`; **student-driver** uses `@mbu.asia`.
+- Driver / student-driver / admin accounts are created by hand in Firebase:
+  Authentication → Add user, then a Firestore `users/<uid>` doc with `role` (+ `gender` for
+  student-drivers, so the female-only feature works). The document ID **must equal the
+  account's UID**.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## Firebase setup (one-time, in the console)
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+1. **Firestore → Rules** → paste the contents of `firestore.rules` → **Publish**.
+2. **Authentication → Sign-in method** → enable **Email/Password** (and Google if used).
+3. **Authentication → Settings → Authorized domains** → add your deploy domain (e.g. the
+   Vercel URL) so login works on the live site.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
 
-### Code Splitting
+## Deploy (Vercel — recommended for Next.js)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+1. Push this repo to GitHub.
+2. Go to [vercel.com](https://vercel.com) → **Add New → Project** → import the GitHub repo.
+3. In **Environment Variables**, add the same six `NEXT_PUBLIC_FIREBASE_*` values from
+   `.env.local`.
+4. **Deploy.** Vercel gives you a live URL.
+5. Add that URL to Firebase **Authorized domains** (step above) so login works.
 
-### Analyzing the Bundle Size
+## Scripts
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+| Command | What it does |
+|---|---|
+| `npm run dev` | Run locally at http://localhost:9002 |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run typecheck` | TypeScript check |
